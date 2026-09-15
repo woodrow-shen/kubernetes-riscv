@@ -35,10 +35,14 @@ permissions:
   contents: write
   packages: write
 
+# ETCD_IMAGE_TAG, COREDNS_VERSION and PAUSE_TAG must match this tree's
+# kubeadm constants (cmd/kubeadm/app/constants/constants.go) so that
+# kubeadm with imageRepository=${REGISTRY} pulls these images directly.
 env:
   REGISTRY: ghcr.io/riseproject-dev
-  ETCD_VERSION: v3.5.21
-  COREDNS_VERSION: v1.12.1
+  ETCD_VERSION: v3.6.8
+  ETCD_IMAGE_TAG: "3.6.8-0"
+  COREDNS_VERSION: v1.14.2
   FLANNEL_VERSION: v0.28.0
   PAUSE_TAG: "3.10.2"
 
@@ -74,7 +78,11 @@ jobs:
         run: |
           K8S_VERSION="${{ inputs.k8s_version || '' }}"
           if [ -z "${K8S_VERSION}" ]; then
-            K8S_VERSION=$(git describe --tags --abbrev=0)
+            K8S_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          fi
+          if [ -z "${K8S_VERSION}" ]; then
+            echo "ERROR: unable to determine K8S_VERSION (no tags in checkout); pass the k8s_version input" >&2
+            exit 1
           fi
           echo "K8S_VERSION=${K8S_VERSION}" >> "$GITHUB_ENV"
 
@@ -185,7 +193,11 @@ jobs:
         run: |
           K8S_VERSION="${{ inputs.k8s_version || '' }}"
           if [ -z "${K8S_VERSION}" ]; then
-            K8S_VERSION=$(git describe --tags --abbrev=0)
+            K8S_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          fi
+          if [ -z "${K8S_VERSION}" ]; then
+            echo "ERROR: unable to determine K8S_VERSION (no tags in checkout); pass the k8s_version input" >&2
+            exit 1
           fi
           echo "K8S_VERSION=${K8S_VERSION}" >> "$GITHUB_ENV"
 
@@ -232,9 +244,9 @@ jobs:
 
       - name: Push dependency images
         run: |
-          # BuildKit pulls base images from the registry rather than the
-          # local Docker store, so dependency images must be pushed before
-          # building server images.
+          # The release scripts reference base images by registry name, and
+          # image pulls during the server-image build resolve against the
+          # registry, so dependency images must be pushed first.
           sudo podman push "${REGISTRY}/kube-cross:${KUBE_CROSS_TAG}"
           sudo podman push "${REGISTRY}/go-runner:${GO_RUNNER_TAG}"
           sudo podman push "${REGISTRY}/setcap:${SETCAP_TAG}"
@@ -279,21 +291,26 @@ jobs:
           sudo podman build --platform linux/riscv64 \
             -t "${REGISTRY}/pause:${PAUSE_TAG}-linux-riscv64" \
             --build-arg BASE=scratch --build-arg ARCH=riscv64 .
+          # Unsuffixed tag: kubeadm and containerd's sandbox_image expect
+          # pause:${PAUSE_TAG} under the image repository.
+          sudo podman tag \
+            "${REGISTRY}/pause:${PAUSE_TAG}-linux-riscv64" \
+            "${REGISTRY}/pause:${PAUSE_TAG}"
 
       - name: Build ecosystem images
         run: |
-          # etcd
+          # etcd (tag matches kubeadm's DefaultEtcdVersion)
           sudo podman build \
             --build-arg ETCD_VERSION="${ETCD_VERSION}" \
             --build-arg GO_VERSION="${GO_VERSION}" \
-            -t "${REGISTRY}/etcd:${ETCD_VERSION}-riscv64" \
+            -t "${REGISTRY}/etcd:${ETCD_IMAGE_TAG}" \
             riscv64/ecosystem/etcd/
 
-          # CoreDNS
+          # CoreDNS (tag matches kubeadm's CoreDNSVersion)
           sudo podman build \
             --build-arg COREDNS_VERSION="${COREDNS_VERSION}" \
             --build-arg GO_VERSION="${GO_VERSION}" \
-            -t "${REGISTRY}/coredns:${COREDNS_VERSION}-riscv64" \
+            -t "${REGISTRY}/coredns:${COREDNS_VERSION}" \
             riscv64/ecosystem/coredns/
 
           # Flannel
@@ -303,12 +320,24 @@ jobs:
             -t "${REGISTRY}/flannel:${FLANNEL_VERSION}-riscv64" \
             riscv64/ecosystem/flannel/
 
+      - name: Tag component images for kubeadm
+        run: |
+          # build/lib/release.sh names images ${binary}-${arch}. kubeadm with
+          # a custom imageRepository pulls unsuffixed names, so alias them.
+          for img in kube-apiserver kube-controller-manager kube-scheduler kube-proxy; do
+            sudo podman tag \
+              "${REGISTRY}/${img}-riscv64:${K8S_VERSION}" \
+              "${REGISTRY}/${img}:${K8S_VERSION}"
+          done
+
       - name: Verify images
         run: |
           echo "=== Kubernetes component images ==="
           for img in kube-apiserver kube-controller-manager kube-scheduler kube-proxy; do
-            echo -n "${img}-riscv64: "
-            sudo podman inspect "${REGISTRY}/${img}-riscv64:${K8S_VERSION}" --format '{{.Architecture}}' 2>/dev/null || echo "MISSING"
+            for name in "${img}-riscv64" "${img}"; do
+              echo -n "${name}: "
+              sudo podman inspect "${REGISTRY}/${name}:${K8S_VERSION}" --format '{{.Architecture}}' 2>/dev/null || echo "MISSING"
+            done
           done
 
           echo "=== Dependency images ==="
@@ -321,8 +350,8 @@ jobs:
           done
 
           echo "=== Ecosystem images ==="
-          for img in "etcd:${ETCD_VERSION}-riscv64" \
-                     "coredns:${COREDNS_VERSION}-riscv64" \
+          for img in "etcd:${ETCD_IMAGE_TAG}" \
+                     "coredns:${COREDNS_VERSION}" \
                      "flannel:${FLANNEL_VERSION}-riscv64"; do
             echo -n "${img}: "
             sudo podman inspect "${REGISTRY}/${img}" --format '{{.Architecture}}' 2>/dev/null || echo "MISSING"
@@ -331,13 +360,16 @@ jobs:
       - name: Push images
         if: inputs.publish == true || github.event_name == 'schedule'
         run: |
-          # Kubernetes components (arch-suffixed per upstream convention)
+          # Kubernetes components: arch-suffixed (upstream convention) plus
+          # unsuffixed aliases for kubeadm's imageRepository resolution
           for img in kube-apiserver kube-controller-manager kube-scheduler kube-proxy; do
             sudo podman push "${REGISTRY}/${img}-riscv64:${K8S_VERSION}"
+            sudo podman push "${REGISTRY}/${img}:${K8S_VERSION}"
           done
 
           # Pause
           sudo podman push "${REGISTRY}/pause:${PAUSE_TAG}-linux-riscv64"
+          sudo podman push "${REGISTRY}/pause:${PAUSE_TAG}"
 
           # Dependency images (already pushed before make release-images,
           # re-push is a no-op but keeps the release gate explicit)
@@ -346,8 +378,8 @@ jobs:
           sudo podman push "${REGISTRY}/setcap:${SETCAP_TAG}"
 
           # Ecosystem
-          sudo podman push "${REGISTRY}/etcd:${ETCD_VERSION}-riscv64"
-          sudo podman push "${REGISTRY}/coredns:${COREDNS_VERSION}-riscv64"
+          sudo podman push "${REGISTRY}/etcd:${ETCD_IMAGE_TAG}"
+          sudo podman push "${REGISTRY}/coredns:${COREDNS_VERSION}"
           sudo podman push "${REGISTRY}/flannel:${FLANNEL_VERSION}-riscv64"
 
       - name: Log out of GHCR
@@ -358,7 +390,9 @@ jobs:
     name: Create release
     runs-on: ubuntu-24.04
     needs: [build-binaries, build-images]
-    if: inputs.publish == true
+    # Matches the image-push condition so every published image set has a
+    # corresponding GitHub release (monthly cron included).
+    if: inputs.publish == true || github.event_name == 'schedule'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -370,7 +404,11 @@ jobs:
         run: |
           K8S_VERSION="${{ inputs.k8s_version || '' }}"
           if [ -z "${K8S_VERSION}" ]; then
-            K8S_VERSION=$(git describe --tags --abbrev=0)
+            K8S_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          fi
+          if [ -z "${K8S_VERSION}" ]; then
+            echo "ERROR: unable to determine K8S_VERSION (no tags in checkout); pass the k8s_version input" >&2
+            exit 1
           fi
           echo "K8S_VERSION=${K8S_VERSION}" >> "$GITHUB_ENV"
 
@@ -399,14 +437,18 @@ jobs:
 
           | Image | Tag |
           |-------|-----|
-          | kube-apiserver-riscv64 | \`${K8S_VERSION}\` |
-          | kube-controller-manager-riscv64 | \`${K8S_VERSION}\` |
-          | kube-scheduler-riscv64 | \`${K8S_VERSION}\` |
-          | kube-proxy-riscv64 | \`${K8S_VERSION}\` |
-          | pause | \`${PAUSE_TAG}-linux-riscv64\` |
-          | etcd | \`${ETCD_VERSION}-riscv64\` |
-          | coredns | \`${COREDNS_VERSION}-riscv64\` |
+          | kube-apiserver | \`${K8S_VERSION}\` |
+          | kube-controller-manager | \`${K8S_VERSION}\` |
+          | kube-scheduler | \`${K8S_VERSION}\` |
+          | kube-proxy | \`${K8S_VERSION}\` |
+          | pause | \`${PAUSE_TAG}\` |
+          | etcd | \`${ETCD_IMAGE_TAG}\` |
+          | coredns | \`${COREDNS_VERSION}\` |
           | flannel | \`${FLANNEL_VERSION}-riscv64\` |
+
+          Component images are also published with an arch-suffixed name
+          (e.g. \`kube-apiserver-riscv64:${K8S_VERSION}\`). The unsuffixed
+          tags above are what \`kubeadm init --image-repository\` expects.
 
           ### Deployment
 
