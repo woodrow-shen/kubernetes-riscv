@@ -50,7 +50,7 @@ jobs:
       - name: Run unit tests
         run: |
           make test \
-            KUBE_TIMEOUT=300s \
+            KUBE_TIMEOUT=-timeout=300s \
             GOFLAGS="-count=1" \
             2>&1 | tee test-output.log
         continue-on-error: true
