@@ -23,13 +23,18 @@ Status of all components required for a functional Kubernetes cluster on
 
 | Component | Build Method | CGO Required | Notes |
 |-----------|-------------|-------------|-------|
-| kube-apiserver | `make cross` | No | |
-| kube-controller-manager | `make cross` | No | |
-| kube-scheduler | `make cross` | No | |
-| kube-proxy | `make cross` | No | |
-| kubelet | `make cross` | Recommended | seccomp requires CGO |
-| kubeadm | `make cross` | No | |
-| kubectl | `make cross` | No | |
+| kube-apiserver | `make all` | No | |
+| kube-controller-manager | `make all` | No | |
+| kube-scheduler | `make all` | No | |
+| kube-proxy | `make all` | No | |
+| kubelet | `make all` | Recommended | seccomp requires CGO |
+| kubeadm | `make all` | No | |
+| kubectl | `make all` | No | |
+
+Cross builds use `KUBE_BUILD_PLATFORMS=linux/riscv64 make all WHAT=...`;
+native builds on riscv64 use plain `make all`. Do not use `make cross` for
+specific components -- it ignores `WHAT` (see
+[known-issues.md](known-issues.md) and [building.md](building.md)).
 
 ## Kubernetes Build Images
 
@@ -53,15 +58,25 @@ Status of all components required for a functional Kubernetes cluster on
 
 Note: Only debian13 (Trixie) distroless images include riscv64 manifests.
 
+The community etcd and CoreDNS images use the root variant
+(`gcr.io/distroless/static-debian13:latest`, not `:nonroot`), matching the
+upstream images: kubeadm static pods read root-owned paths such as
+`/etc/kubernetes/pki` and `/var/lib/etcd`, and CoreDNS binds port 53.
+
 ## Ecosystem Components
 
 | Component | Version | riscv64 Status | Notes |
 |-----------|---------|---------------|-------|
-| etcd | v3.5.x | Compiles from source | Requires `ETCD_UNSUPPORTED_ARCH=riscv64` |
-| CoreDNS | v1.12.x | Compiles from source | Pure Go, no special handling |
-| Flannel | v0.28.x | Compiles from source | Includes CNI plugin |
+| etcd | v3.6.8 | Compiles from source | Requires `ETCD_UNSUPPORTED_ARCH=riscv64`; published as `etcd:3.6.8-0` |
+| CoreDNS | v1.14.2 | Compiles from source | Pure Go, no special handling; published as `coredns:v1.14.2` |
+| Flannel | v0.28.0 | Compiles from source | Includes CNI plugin; published as `flannel:v0.28.0-riscv64` |
 | Helm | v3.x | Official riscv64 binaries | [github.com/helm/helm](https://github.com/helm/helm/releases) |
 | crictl | v1.x | Compiles from source | CRI debugging tool |
+
+The etcd, CoreDNS, and pause image tags (`etcd:3.6.8-0`, `coredns:v1.14.2`,
+`pause:3.10.2`) must track kubeadm's defaults in
+`cmd/kubeadm/app/constants/constants.go` so that kubeadm with a custom
+`imageRepository` pulls them directly.
 
 ## Debian Trixie Packages (riscv64)
 
