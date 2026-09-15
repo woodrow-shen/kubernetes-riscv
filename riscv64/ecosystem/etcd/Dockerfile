@@ -5,16 +5,21 @@
 #
 # Build:
 #   docker buildx build --platform linux/riscv64 \
-#     --build-arg ETCD_VERSION=v3.5.21 \
-#     -t ghcr.io/riseproject-dev/etcd:v3.5.21-riscv64 .
+#     --build-arg ETCD_VERSION=v3.6.8 \
+#     -t ghcr.io/riseproject-dev/etcd:3.6.8-0 .
+#
+# The image tag must match kubeadm's DefaultEtcdVersion (e.g. 3.6.8-0) so
+# that `kubeadm init --image-repository ghcr.io/riseproject-dev` resolves it.
 
 ARG GO_VERSION=1.26.2
-ARG BASEIMAGE=gcr.io/distroless/static-debian13:nonroot
+# Root variant required: kubeadm's etcd static pod writes to a root-owned
+# hostPath (/var/lib/etcd), matching upstream registry.k8s.io/etcd.
+ARG BASEIMAGE=gcr.io/distroless/static-debian13:latest
 
 # Stage 1: Build etcd from source
-FROM golang:${GO_VERSION}-trixie AS builder
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-trixie AS builder
 
-ARG ETCD_VERSION=v3.5.21
+ARG ETCD_VERSION=v3.6.8
 ARG TARGETOS=linux
 ARG TARGETARCH=riscv64
 
