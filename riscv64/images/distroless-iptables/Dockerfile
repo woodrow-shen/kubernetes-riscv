@@ -14,7 +14,9 @@
 # library dependencies from a Debian Trixie build layer into a distroless base.
 
 ARG BASEIMAGE=debian:trixie-slim
-ARG DISTROLESS_IMAGE=gcr.io/distroless/static-debian13:nonroot
+# Root variant required: upstream distroless-iptables runs as root because
+# kube-proxy must manage iptables/nftables rules.
+ARG DISTROLESS_IMAGE=gcr.io/distroless/static-debian13:latest
 ARG GORUNNERIMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0
 
 FROM ${GORUNNERIMAGE} AS go-runner-src
@@ -55,6 +57,19 @@ RUN for bin in \
       done; \
     fi; \
   done
+
+# Debian resolves iptables via /etc/alternatives (not staged), so the
+# cp -a above leaves dangling symlinks; point the classic names straight
+# at the staged xtables-nft-multi multicall binary.
+RUN for cmd in iptables iptables-save iptables-restore \
+               ip6tables ip6tables-save ip6tables-restore; do \
+      ln -sf xtables-nft-multi "/stage/usr/sbin/$cmd"; \
+    done
+
+# iptables loads match/target extensions (libxt_*.so) via dlopen, which the
+# ldd loop above cannot see; stage the xtables plugin directory wholesale.
+RUN mkdir -p /stage/usr/lib/riscv64-linux-gnu && \
+    cp -a /usr/lib/riscv64-linux-gnu/xtables /stage/usr/lib/riscv64-linux-gnu/
 
 # Copy helper shell utilities (use /usr/bin paths — /bin is a symlink in Trixie)
 RUN for bin in /usr/bin/dash /usr/bin/sh /usr/bin/chmod /usr/bin/grep /usr/bin/ln /usr/bin/rm /usr/bin/sleep; do \

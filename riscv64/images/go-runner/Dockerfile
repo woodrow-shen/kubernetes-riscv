@@ -13,7 +13,9 @@
 # for Kubernetes component container images.
 
 ARG GO_VERSION=1.26.2
-ARG DISTROLESS_IMAGE=gcr.io/distroless/static-debian13:nonroot
+# Root variant required: upstream go-runner runs as USER 0 and kubeadm
+# control-plane static pods must read root-owned /etc/kubernetes/pki.
+ARG DISTROLESS_IMAGE=gcr.io/distroless/static-debian13:latest
 
 # Stage 1: Build go-runner from source
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-trixie AS builder

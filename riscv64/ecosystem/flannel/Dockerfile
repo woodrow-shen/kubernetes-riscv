@@ -12,7 +12,7 @@ ARG GO_VERSION=1.26.2
 ARG BASEIMAGE=debian:trixie-slim
 
 # Stage 1: Build Flannel from source
-FROM golang:${GO_VERSION}-trixie AS builder
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-trixie AS builder
 
 ARG FLANNEL_VERSION=v0.28.0
 ARG TARGETOS=linux
@@ -49,5 +49,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /out/flanneld /opt/bin/flanneld
 COPY --from=builder /out/flannel-cni /opt/cni/bin/flannel
+# Upstream kube-flannel.yml's install-cni-plugin init container runs
+# "cp -f /flannel /opt/cni/bin/flannel", so the plugin must also exist at /flannel
+# for this image to substitute for docker.io/flannel/flannel-cni-plugin.
+COPY --from=builder /out/flannel-cni /flannel
 
 ENTRYPOINT ["/opt/bin/flanneld"]

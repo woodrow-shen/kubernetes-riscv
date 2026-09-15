@@ -8,10 +8,14 @@
 #   REGISTRY            Container registry (default: ghcr.io/riseproject-dev)
 #   K8S_VERSION         Kubernetes version tag (default: from git)
 #   GO_VERSION          Go version (default: from .go-version)
-#   ETCD_VERSION        etcd version (default: v3.5.21)
-#   COREDNS_VERSION     CoreDNS version (default: v1.12.1)
+#   ETCD_VERSION        etcd version (default: v3.6.8)
+#   COREDNS_VERSION     CoreDNS version (default: v1.14.2)
 #   FLANNEL_VERSION     Flannel version (default: v0.28.0)
 #   PAUSE_TAG           Pause image tag (default: 3.10.2)
+#
+# etcd and CoreDNS tags must match this tree's kubeadm constants
+# (cmd/kubeadm/app/constants/constants.go: DefaultEtcdVersion, CoreDNSVersion)
+# so that kubeadm with imageRepository=${REGISTRY} pulls them directly.
 
 set -euo pipefail
 
@@ -21,10 +25,12 @@ cd "${KUBE_ROOT}"
 REGISTRY="${1:-${REGISTRY:-ghcr.io/riseproject-dev}}"
 GO_VERSION="${GO_VERSION:-$(cat .go-version)}"
 K8S_VERSION="${K8S_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")}"
-ETCD_VERSION="${ETCD_VERSION:-v3.5.21}"
-COREDNS_VERSION="${COREDNS_VERSION:-v1.12.1}"
+ETCD_VERSION="${ETCD_VERSION:-v3.6.8}"
+COREDNS_VERSION="${COREDNS_VERSION:-v1.14.2}"
 FLANNEL_VERSION="${FLANNEL_VERSION:-v0.28.0}"
 PAUSE_TAG="${PAUSE_TAG:-3.10.2}"
+# kubeadm's etcd image tag appends a rebuild revision (e.g. 3.6.8-0)
+ETCD_IMAGE_TAG="${ETCD_IMAGE_TAG:-${ETCD_VERSION#v}-0}"
 PLATFORM="linux/riscv64"
 
 GO_RUNNER_TAG="v2.4.0-go${GO_VERSION}-trixie.0"
@@ -70,7 +76,7 @@ echo "--- Building etcd ---"
 docker buildx build --platform "${PLATFORM}" \
   --build-arg ETCD_VERSION="${ETCD_VERSION}" \
   --build-arg GO_VERSION="${GO_VERSION}" \
-  -t "${REGISTRY}/etcd:${ETCD_VERSION}-riscv64" \
+  -t "${REGISTRY}/etcd:${ETCD_IMAGE_TAG}" \
   --load \
   riscv64/ecosystem/etcd/
 
@@ -79,7 +85,7 @@ echo "--- Building CoreDNS ---"
 docker buildx build --platform "${PLATFORM}" \
   --build-arg COREDNS_VERSION="${COREDNS_VERSION}" \
   --build-arg GO_VERSION="${GO_VERSION}" \
-  -t "${REGISTRY}/coredns:${COREDNS_VERSION}-riscv64" \
+  -t "${REGISTRY}/coredns:${COREDNS_VERSION}" \
   --load \
   riscv64/ecosystem/coredns/
 
