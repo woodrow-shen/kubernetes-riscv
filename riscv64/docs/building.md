@@ -12,7 +12,7 @@ All methods require:
 ```bash
 git clone https://github.com/kubernetes/kubernetes.git
 cd kubernetes
-git checkout v1.32.0  # or your target version
+git checkout v1.36.0  # or your target version
 ```
 
 ## Method 1: Cross-Compile from amd64/arm64 (Recommended)
@@ -107,9 +107,12 @@ sudo apt-get install -y git make gcc rsync
 
 ### Install Go
 
+Install the Go version pinned by the Kubernetes source tree (run from the
+source checkout):
+
 ```bash
-GO_VERSION=$(curl -s https://go.dev/VERSION?m=text | head -1)
-curl -fsSL "https://go.dev/dl/${GO_VERSION}.linux-riscv64.tar.gz" | sudo tar -C /usr/local -xz
+GO_VERSION=$(cat .go-version)
+curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-riscv64.tar.gz" | sudo tar -C /usr/local -xz
 export PATH="/usr/local/go/bin:$PATH"
 ```
 
@@ -138,8 +141,11 @@ docker run --rm \
   -w /go/src/k8s.io/kubernetes \
   -e KUBE_BUILD_PLATFORMS=linux/riscv64 \
   ghcr.io/riseproject-dev/kube-cross:v1.36.0-go1.26.2-trixie.0 \
-  make cross WHAT="cmd/kubelet cmd/kubeadm cmd/kubectl"
+  make all WHAT="cmd/kubelet cmd/kubeadm cmd/kubectl"
 ```
+
+Note: use `make all`, not `make cross` -- `make cross` ignores `WHAT` and
+builds every target for every platform (see [known-issues.md](known-issues.md)).
 
 ### Or use the Kubernetes dockerized build system
 
@@ -150,7 +156,7 @@ export KUBE_CROSS_IMAGE=ghcr.io/riseproject-dev/kube-cross
 export KUBE_CROSS_VERSION=v1.36.0-go1.26.2-trixie.0
 export KUBE_BUILD_PLATFORMS=linux/riscv64
 
-make cross WHAT="cmd/kubelet cmd/kubeadm cmd/kubectl"
+build/run.sh make all WHAT="cmd/kubelet cmd/kubeadm cmd/kubectl"
 ```
 
 ## CGO Considerations

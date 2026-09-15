@@ -5,8 +5,21 @@
 etcd does not officially support riscv64. The `ETCD_UNSUPPORTED_ARCH=riscv64`
 environment variable must be set at runtime. Without it, etcd refuses to start.
 
-This is set automatically in the community etcd Dockerfile. When using kubeadm,
-add the environment variable to the etcd static pod manifest:
+This is set automatically in the community etcd Dockerfile. When using
+kubeadm, the clean fix is the kubeadm v1beta4 `etcd.local.extraEnvs` field
+in the ClusterConfiguration, which injects the variable into the generated
+etcd static pod manifest (see [cluster-setup.md](cluster-setup.md)):
+
+```yaml
+etcd:
+  local:
+    extraEnvs:
+    - name: ETCD_UNSUPPORTED_ARCH
+      value: "riscv64"
+```
+
+Alternatively (for clusters not managed by kubeadm), add the environment
+variable to the etcd static pod manifest by hand:
 
 ```yaml
 # /etc/kubernetes/manifests/etcd.yaml
@@ -39,17 +52,21 @@ make all WHAT="cmd/kubelet" GOFLAGS="-p=2"
 
 The `docker/setup-docker-action` GitHub Action does not support riscv64
 runners. When using RISE Project riscv64 runners (`ubuntu-24.04-riscv`),
-skip this action and rely on the Docker pre-installed on the runner:
+skip this action and rely on the container engine pre-installed on the
+runner. Condition the step on however your workflow selects the runner --
+for example, a matrix variable holding the `runs-on` label:
 
 ```yaml
 - uses: docker/setup-docker-action@v4
-  if: inputs.arch != 'riscv64'
+  if: matrix.runner != 'ubuntu-24.04-riscv'
 ```
 
 ## Pause Image Override
 
 The default pause image (`registry.k8s.io/pause`) does not include an riscv64
-variant. All nodes must be configured to use the community pause image.
+variant. All nodes must be configured to use the community pause image. CI
+publishes it both as `pause:3.10.2-linux-riscv64` (upstream naming) and as
+the unsuffixed `ghcr.io/riseproject-dev/pause:3.10.2` used below.
 
 For containerd v2.x, set in `/etc/containerd/config.toml`:
 ```toml

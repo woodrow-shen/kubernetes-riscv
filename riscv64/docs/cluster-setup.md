@@ -53,16 +53,16 @@ EOF
 sudo sysctl --system
 ```
 
-## Install Container Runtime and Tools
+## Install Container Runtime
 
-containerd provides official riscv64 binaries. podman is used for image
-management (`pull`, `tag`, `push`). The `podman-docker` package provides
-`docker` and `ctr` CLI compatibility.
+Debian Trixie ships containerd for riscv64. containerd includes the `ctr`
+CLI. podman is optional and only useful for building or inspecting images
+locally; it is not needed for cluster operation.
 
 ```bash
-# Install containerd and podman from Debian repos
+# Install containerd from Debian repos
 sudo apt-get update
-sudo apt-get install -y containerd podman podman-docker
+sudo apt-get install -y containerd
 
 # Generate default config
 sudo mkdir -p /etc/containerd
@@ -74,11 +74,18 @@ sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/conf
 
 ### Configure the sandbox (pause) image
 
-Replace the default pause image with the community riscv64 image:
+Replace the default pause image reference with the community riscv64 image,
+keeping the surrounding TOML quotes intact:
 
 ```bash
-# For containerd v2.x
-sudo sed -i 's|registry.k8s.io/pause:.*|ghcr.io/riseproject-dev/pause:3.10.2|' /etc/containerd/config.toml
+# containerd v1.x config (Debian Trixie ships 1.7.x):
+sudo sed -i \
+  's|sandbox_image = .*|sandbox_image = "ghcr.io/riseproject-dev/pause:3.10.2"|' \
+  /etc/containerd/config.toml
+
+# containerd v2.x config uses the "sandbox" key instead:
+#   [plugins.'io.containerd.cri.v1.images'.pinned_images]
+#     sandbox = 'ghcr.io/riseproject-dev/pause:3.10.2'
 
 sudo systemctl restart containerd
 sudo systemctl enable containerd
@@ -97,15 +104,19 @@ curl -fsSL "https://github.com/containernetworking/plugins/releases/download/${C
 
 ### From community builds
 
-```bash
-K8S_VERSION=v1.32.0
+Community releases are tagged `${K8S_VERSION}-riscv64` and contain flat
+tarballs of binaries (see the Releases page):
 
-# Download pre-built binaries (when available)
-# curl -fsSL "https://github.com/riseproject-dev/kubernetes-riscv/releases/download/${K8S_VERSION}/kubernetes-${K8S_VERSION}-riscv64-linux.tar.gz" | sudo tar -C /usr/local/bin -xz
+```bash
+K8S_VERSION=v1.36.0
+
+curl -fsSL "https://github.com/riseproject-dev/kubernetes-riscv/releases/download/${K8S_VERSION}-riscv64/kubernetes-node-linux-riscv64-${K8S_VERSION}.tar.gz" \
+  | sudo tar -C /usr/local/bin -xz
+sudo chmod +x /usr/local/bin/{kubelet,kubeadm,kubectl}
 
 # Or copy binaries built from source (see building.md)
-sudo cp _output/local/bin/linux/riscv64/{kubelet,kubeadm,kubectl} /usr/local/bin/
-sudo chmod +x /usr/local/bin/{kubelet,kubeadm,kubectl}
+# sudo cp _output/local/bin/linux/riscv64/{kubelet,kubeadm,kubectl} /usr/local/bin/
+# sudo chmod +x /usr/local/bin/{kubelet,kubeadm,kubectl}
 ```
 
 ### Configure kubelet systemd service
@@ -143,35 +154,44 @@ sudo systemctl daemon-reload
 sudo systemctl enable kubelet
 ```
 
-## Pre-Pull Images (Control Plane)
-
-Pull the community riscv64 images before running kubeadm:
-
-```bash
-REGISTRY=ghcr.io/riseproject-dev
-K8S_VERSION=v1.32.0
-
-for img in kube-apiserver kube-controller-manager kube-scheduler kube-proxy; do
-  sudo ctr image pull ${REGISTRY}/${img}:${K8S_VERSION}
-  sudo ctr image tag ${REGISTRY}/${img}:${K8S_VERSION} registry.k8s.io/${img}:${K8S_VERSION}
-done
-
-sudo ctr image pull ${REGISTRY}/pause:3.10.2
-sudo ctr image tag ${REGISTRY}/pause:3.10.2 registry.k8s.io/pause:3.10.2
-
-sudo ctr image pull ${REGISTRY}/etcd:v3.5.21-riscv64
-sudo ctr image tag ${REGISTRY}/etcd:v3.5.21-riscv64 registry.k8s.io/etcd:3.5.21-0
-
-sudo ctr image pull ${REGISTRY}/coredns:v1.12.1-riscv64
-sudo ctr image tag ${REGISTRY}/coredns:v1.12.1-riscv64 registry.k8s.io/coredns/coredns:v1.12.1
-```
-
 ## Initialize the Cluster (Control Plane Only)
 
+The community images are published under `ghcr.io/riseproject-dev` with the
+exact names and tags kubeadm derives (`kube-apiserver:${K8S_VERSION}`,
+`etcd:3.6.8-0`, `coredns:v1.14.2`, `pause:3.10.2`), so pointing kubeadm's
+`imageRepository` at the community registry is all that is needed — no
+manual pulling or retagging.
+
+etcd does not officially support riscv64 and refuses to start unless
+`ETCD_UNSUPPORTED_ARCH=riscv64` is set; the `extraEnvs` entry below injects
+it into the etcd static pod that kubeadm generates.
+
 ```bash
-sudo kubeadm init \
-  --pod-network-cidr=10.244.0.0/16 \
-  --kubernetes-version=${K8S_VERSION}
+K8S_VERSION=v1.36.0
+
+cat <<EOF > kubeadm-config.yaml
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+nodeRegistration:
+  criSocket: unix:///run/containerd/containerd.sock
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: ${K8S_VERSION}
+imageRepository: ghcr.io/riseproject-dev
+networking:
+  podSubnet: 10.244.0.0/16
+etcd:
+  local:
+    extraEnvs:
+      - name: ETCD_UNSUPPORTED_ARCH
+        value: riscv64
+EOF
+
+# Optional: pre-pull all images to fail fast on registry issues
+sudo kubeadm config images pull --config kubeadm-config.yaml
+
+sudo kubeadm init --config kubeadm-config.yaml
 ```
 
 ### Configure kubectl
@@ -195,12 +215,17 @@ kubectl taint nodes --all node-role.kubernetes.io/control-plane-
 kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
 ```
 
-If the default Flannel image does not include riscv64, patch the DaemonSet:
+The upstream Flannel images do not include riscv64, so patch the DaemonSet's
+main container and both init containers (`install-cni-plugin` and
+`install-cni`) to the community image, which also carries the CNI plugin
+binary at the path the init container copies from:
 
 ```bash
-kubectl set image daemonset/kube-flannel-ds \
-  -n kube-flannel \
-  kube-flannel=ghcr.io/riseproject-dev/flannel:v0.28.0-riscv64
+FLANNEL_IMAGE=ghcr.io/riseproject-dev/flannel:v0.28.0-riscv64
+kubectl -n kube-flannel set image daemonset/kube-flannel-ds \
+  kube-flannel="${FLANNEL_IMAGE}" \
+  install-cni-plugin="${FLANNEL_IMAGE}" \
+  install-cni="${FLANNEL_IMAGE}"
 ```
 
 ## Join Worker Nodes
@@ -210,8 +235,8 @@ On the control plane, generate a join token:
 kubeadm token create --print-join-command
 ```
 
-On each worker node (after installing binaries, containerd, CNI, and
-pre-pulling the pause image):
+On each worker node (after installing binaries, containerd with the
+community sandbox image configured, and CNI plugins):
 ```bash
 sudo kubeadm join <control-plane-ip>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
 ```
@@ -222,7 +247,7 @@ sudo kubeadm join <control-plane-ip>:6443 --token <token> --discovery-token-ca-c
 # Check nodes
 kubectl get nodes -o wide
 # NAME     STATUS   ROLES           AGE   VERSION   INTERNAL-IP   OS-IMAGE           KERNEL-VERSION   CONTAINER-RUNTIME   ARCH
-# node1    Ready    control-plane   5m    v1.32.0   10.0.0.1      Debian Trixie      6.x.x            containerd://2.x    riscv64
+# node1    Ready    control-plane   5m    v1.36.0   10.0.0.1      Debian Trixie      6.x.x            containerd://1.7    riscv64
 
 # Check system pods
 kubectl get pods -n kube-system

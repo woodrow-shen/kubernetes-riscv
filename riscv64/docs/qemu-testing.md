@@ -254,11 +254,14 @@ Once the VM is running and binaries are installed:
 # Install podman inside the VM for image management
 sudo apt-get install -y podman podman-docker
 
-# Pre-pull and tag community images for kubeadm (see cluster-setup.md)
-# ...
+# Write the kubeadm config from cluster-setup.md: it points
+# imageRepository at ghcr.io/riseproject-dev (which publishes all
+# component, etcd, CoreDNS, and pause images under the tags kubeadm
+# expects) and sets ETCD_UNSUPPORTED_ARCH via etcd.local.extraEnvs.
+# No manual image pulling or retagging is needed.
 
 # Initialize single-node cluster
-sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+sudo kubeadm init --config kubeadm-config.yaml
 mkdir -p ~/.kube && sudo cp /etc/kubernetes/admin.conf ~/.kube/config
 kubectl taint nodes --all node-role.kubernetes.io/control-plane-
 kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
@@ -273,6 +276,71 @@ kubectl exec test -- uname -m
 If the cluster fails to initialize or pods remain pending, consult
 [known-issues.md](known-issues.md) for common riscv64-specific problems
 (etcd architecture flags, pause image configuration).
+
+## Ubuntu 24.04 Variant
+
+The flow above uses Debian Trixie with EDK2 UEFI firmware. Ubuntu 24.04
+(Noble) also ships a riscv64 cloud image and boots with the simpler
+S-mode U-Boot payload instead of EDK2 pflash devices.
+
+### Host packages
+
+```bash
+sudo apt-get install -y qemu-system-misc u-boot-qemu qemu-user-static
+```
+
+`u-boot-qemu` provides `/usr/lib/u-boot/qemu-riscv64_smode/uboot.elf`,
+loaded via `-kernel`; QEMU supplies OpenSBI automatically. Installing
+`qemu-user-static` registers riscv64 binfmt handlers, which enables both
+direct execution of riscv64 binaries and building the apt-based images
+(distroless-iptables, flannel) on an x86_64 host.
+
+### Image and boot
+
+```bash
+curl -fsSLO https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-riscv64.img
+qemu-img create -f qcow2 -b ubuntu-24.04-server-cloudimg-riscv64.img -F qcow2 disk.qcow2 20G
+
+# Cloud-init seed: user + ssh key + k8s prerequisites (see cluster-setup.md
+# for the modules/sysctl content), volume label must be "cidata"
+genisoimage -quiet -output seed.iso -volid cidata -joliet -rock user-data meta-data
+
+qemu-system-riscv64 \
+  -machine virt -cpu rv64 -smp 4 -m 8G \
+  -kernel /usr/lib/u-boot/qemu-riscv64_smode/uboot.elf \
+  -drive file=disk.qcow2,format=qcow2,if=virtio \
+  -drive file=seed.iso,format=raw,if=virtio \
+  -netdev user,id=net0,hostfwd=tcp::2222-:22 \
+  -device virtio-net-device,netdev=net0 \
+  -device virtio-rng-pci \
+  -nographic
+```
+
+First boot to SSH takes about 90 seconds on a modern x86_64 host.
+
+### Ubuntu-specific notes
+
+- Ubuntu 24.04 ships containerd 2.x. The sandbox image lives under
+  `[plugins.'io.containerd.cri.v1.images'.pinned_images]` as
+  `sandbox = '...'`, not the containerd 1.x `sandbox_image` key --
+  adjust the sed from cluster-setup.md accordingly.
+- The glibc-dynamic kubelet built against the Debian Trixie sysroot
+  (glibc 2.39) runs unchanged on Noble (also glibc 2.39). All other
+  components are static.
+- Downloads from GitHub inside the VM over slirp networking can be
+  flaky; stage large artifacts (CNI plugins tarball, image tars) on the
+  host and scp them in via the forwarded port instead.
+- Import images into the containerd namespace kubelet uses:
+  `ctr -n k8s.io images import <bundle>.tar`.
+- Under TCG emulation the control plane starts slowly; raise kubeadm's
+  v1beta4 timeouts in InitConfiguration:
+
+```yaml
+timeouts:
+  controlPlaneComponentHealthCheck: 25m0s
+  kubernetesAPICall: 10m0s
+  etcdAPICall: 10m0s
+```
 
 ## Cleanup
 

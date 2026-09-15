@@ -64,11 +64,27 @@ export KUBE_DOCKER_REGISTRY=ghcr.io/riseproject-dev
 export KUBE_GORUNNER_IMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0
 export KUBE_PROXY_BASE_IMAGE=ghcr.io/riseproject-dev/distroless-iptables:v0.9.0-trixie.0
 export KUBE_APISERVER_BASE_IMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0
-export KUBE_CONTROLLER_MANAGER_BASE_IMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0
-export KUBE_SCHEDULER_BASE_IMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0
 export KUBE_BUILD_SETCAP_IMAGE=ghcr.io/riseproject-dev/setcap:trixie-v1.0.0
 
 make release-images
+```
+
+The kube-controller-manager and kube-scheduler images use the go-runner base
+selected by `KUBE_GORUNNER_IMAGE`; there are no per-component base image
+overrides for them in `build/common.sh`.
+
+The release scripts name the component images with an architecture suffix
+(`kube-apiserver-riscv64:${K8S_VERSION}`), following the upstream
+`release.sh` convention. CI additionally tags and pushes unsuffixed aliases
+(`kube-apiserver:${K8S_VERSION}`) because kubeadm with
+`imageRepository: ghcr.io/riseproject-dev` resolves unsuffixed names:
+
+```bash
+K8S_VERSION=v1.36.0
+for img in kube-apiserver kube-controller-manager kube-scheduler kube-proxy; do
+  docker tag ghcr.io/riseproject-dev/${img}-riscv64:${K8S_VERSION} \
+             ghcr.io/riseproject-dev/${img}:${K8S_VERSION}
+done
 ```
 
 ### Or build individual component images manually
@@ -80,7 +96,7 @@ Each component image is a simple copy of the binary into the base image:
 docker buildx build --platform linux/riscv64 \
   --build-arg BASEIMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0 \
   --build-arg BINARY=kube-apiserver \
-  -t ghcr.io/riseproject-dev/kube-apiserver:v1.32.0 \
+  -t ghcr.io/riseproject-dev/kube-apiserver:v1.36.0 \
   -f build/server-image/Dockerfile \
   _output/local/bin/linux/riscv64/
 ```
@@ -95,6 +111,15 @@ cd build/pause
 make ARCH=riscv64 TAG=3.10.2 REGISTRY=ghcr.io/riseproject-dev
 ```
 
+This produces `pause:3.10.2-linux-riscv64` (upstream naming). CI also tags
+and pushes the unsuffixed alias `pause:3.10.2`, which is the name kubeadm
+and containerd's `sandbox_image` expect under the image repository:
+
+```bash
+docker tag ghcr.io/riseproject-dev/pause:3.10.2-linux-riscv64 \
+           ghcr.io/riseproject-dev/pause:3.10.2
+```
+
 This requires the kube-cross image with `riscv64-linux-gnu-gcc`.
 Override if needed:
 
@@ -106,17 +131,26 @@ make ARCH=riscv64 TAG=3.10.2 REGISTRY=ghcr.io/riseproject-dev \
 
 ## Building Ecosystem Component Images
 
+The etcd and CoreDNS image tags must match kubeadm's defaults
+(`DefaultEtcdVersion` and `CoreDNSVersion` in
+`cmd/kubeadm/app/constants/constants.go`), so they are published unsuffixed
+as `etcd:3.6.8-0` and `coredns:v1.14.2`. Both images use the
+`gcr.io/distroless/static-debian13:latest` base (root variant, not
+`:nonroot`): the upstream images run as root, kubeadm static pods read
+root-owned paths such as `/etc/kubernetes/pki` and `/var/lib/etcd`, and
+CoreDNS binds port 53.
+
 ```bash
-# etcd
+# etcd (tag matches kubeadm's DefaultEtcdVersion)
 docker buildx build --platform linux/riscv64 \
-  --build-arg ETCD_VERSION=v3.5.21 \
-  -t ghcr.io/riseproject-dev/etcd:v3.5.21-riscv64 \
+  --build-arg ETCD_VERSION=v3.6.8 \
+  -t ghcr.io/riseproject-dev/etcd:3.6.8-0 \
   riscv64/ecosystem/etcd/
 
-# CoreDNS
+# CoreDNS (tag matches kubeadm's CoreDNSVersion)
 docker buildx build --platform linux/riscv64 \
-  --build-arg COREDNS_VERSION=v1.12.1 \
-  -t ghcr.io/riseproject-dev/coredns:v1.12.1-riscv64 \
+  --build-arg COREDNS_VERSION=v1.14.2 \
+  -t ghcr.io/riseproject-dev/coredns:v1.14.2 \
   riscv64/ecosystem/coredns/
 
 # Flannel
@@ -132,17 +166,38 @@ docker buildx build --platform linux/riscv64 \
 # Login to GHCR
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 
-# Push all images
-for img in go-runner setcap distroless-iptables pause \
-           kube-apiserver kube-controller-manager kube-scheduler kube-proxy \
-           etcd coredns flannel; do
-  docker push ghcr.io/riseproject-dev/${img}:TAG
+REGISTRY=ghcr.io/riseproject-dev
+K8S_VERSION=v1.36.0
+GO_VERSION=$(cat .go-version)
+
+# Kubernetes components: arch-suffixed (upstream convention) plus
+# unsuffixed aliases for kubeadm's imageRepository resolution
+for img in kube-apiserver kube-controller-manager kube-scheduler kube-proxy; do
+  docker push ${REGISTRY}/${img}-riscv64:${K8S_VERSION}
+  docker push ${REGISTRY}/${img}:${K8S_VERSION}
 done
+
+# Pause: suffixed and unsuffixed
+docker push ${REGISTRY}/pause:3.10.2-linux-riscv64
+docker push ${REGISTRY}/pause:3.10.2
+
+# Dependency images
+docker push ${REGISTRY}/go-runner:v2.4.0-go${GO_VERSION}-trixie.0
+docker push ${REGISTRY}/distroless-iptables:v0.9.0-trixie.0
+docker push ${REGISTRY}/setcap:trixie-v1.0.0
+
+# Ecosystem (etcd and coredns are unsuffixed only)
+docker push ${REGISTRY}/etcd:3.6.8-0
+docker push ${REGISTRY}/coredns:v1.14.2
+docker push ${REGISTRY}/flannel:v0.28.0-riscv64
 ```
 
 ## Multi-Arch Manifests (Optional)
 
-To create manifest lists that support both amd64 and riscv64:
+The unsuffixed `pause:3.10.2` tag is now tagged and pushed automatically by
+CI (`.github/workflows/build-riscv64.yml`), so no manual manifest work is
+needed for a riscv64-only registry. To instead create a manifest list that
+supports both amd64 and riscv64 under the unsuffixed tag:
 
 ```bash
 docker manifest create ghcr.io/riseproject-dev/pause:3.10.2 \

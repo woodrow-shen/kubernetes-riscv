@@ -83,10 +83,12 @@ git clone https://github.com/kubernetes/kubernetes.git
 cd kubernetes
 git checkout v1.36.0   # target release
 
-# Apply the riscv64 build system patches (until merged upstream)
+# Apply the riscv64 build system patches (until merged upstream).
+# The riscv-support branch carries exactly 2 riscv64 commits on top of
+# the upstream tree.
 git remote add riscv https://github.com/riseproject-dev/kubernetes-riscv.git
 git fetch riscv riscv-support
-git cherry-pick riscv/riscv-support~9..riscv/riscv-support
+git cherry-pick riscv/riscv-support~2..riscv/riscv-support
 ```
 
 ## Step 1: Build Kubernetes Binaries
@@ -207,14 +209,26 @@ export KUBE_BUILD_SETCAP_IMAGE=${REGISTRY}/setcap:trixie-v1.0.0
 make release-images
 ```
 
-This produces:
+This produces arch-suffixed images, following the upstream `release.sh`
+naming convention:
 
 | Image | Tag |
 |-------|-----|
-| `${REGISTRY}/kube-apiserver` | `v1.36.0` |
-| `${REGISTRY}/kube-controller-manager` | `v1.36.0` |
-| `${REGISTRY}/kube-scheduler` | `v1.36.0` |
-| `${REGISTRY}/kube-proxy` | `v1.36.0` |
+| `${REGISTRY}/kube-apiserver-riscv64` | `v1.36.0` |
+| `${REGISTRY}/kube-controller-manager-riscv64` | `v1.36.0` |
+| `${REGISTRY}/kube-scheduler-riscv64` | `v1.36.0` |
+| `${REGISTRY}/kube-proxy-riscv64` | `v1.36.0` |
+
+kubeadm with `imageRepository: ghcr.io/riseproject-dev` resolves unsuffixed
+names, so also tag unsuffixed aliases (CI does this automatically):
+
+```bash
+K8S_VERSION=v1.36.0
+for img in kube-apiserver kube-controller-manager kube-scheduler kube-proxy; do
+  docker tag ${REGISTRY}/${img}-riscv64:${K8S_VERSION} \
+             ${REGISTRY}/${img}:${K8S_VERSION}
+done
+```
 
 ### Build the pause image
 
@@ -222,6 +236,10 @@ This produces:
 cd build/pause
 make ARCH=riscv64 TAG=3.10.2 REGISTRY=${REGISTRY}
 cd ../..
+
+# The pause Makefile produces pause:3.10.2-linux-riscv64. kubeadm and
+# containerd's sandbox_image expect the unsuffixed tag, so alias it:
+docker tag ${REGISTRY}/pause:3.10.2-linux-riscv64 ${REGISTRY}/pause:3.10.2
 ```
 
 ## Step 4: Build Ecosystem Component Images
@@ -234,22 +252,29 @@ etcd does not officially support riscv64. The Dockerfile sets
 `ETCD_UNSUPPORTED_ARCH=riscv64` automatically. See
 [known-issues.md](known-issues.md) for runtime configuration details.
 
+The image tag `3.6.8-0` matches kubeadm's `DefaultEtcdVersion` in
+`cmd/kubeadm/app/constants/constants.go`, so kubeadm pulls it without any
+image override.
+
 ```bash
 docker buildx build --platform ${PLATFORM} \
-  --build-arg ETCD_VERSION=v3.5.21 \
+  --build-arg ETCD_VERSION=v3.6.8 \
   --build-arg GO_VERSION=${GO_VERSION} \
-  -t ${REGISTRY}/etcd:v3.5.21-riscv64 \
+  -t ${REGISTRY}/etcd:3.6.8-0 \
   --load \
   riscv64/ecosystem/etcd/
 ```
 
 ### CoreDNS
 
+The image tag matches kubeadm's `CoreDNSVersion` in
+`cmd/kubeadm/app/constants/constants.go`.
+
 ```bash
 docker buildx build --platform ${PLATFORM} \
-  --build-arg COREDNS_VERSION=v1.12.1 \
+  --build-arg COREDNS_VERSION=v1.14.2 \
   --build-arg GO_VERSION=${GO_VERSION} \
-  -t ${REGISTRY}/coredns:v1.12.1-riscv64 \
+  -t ${REGISTRY}/coredns:v1.14.2 \
   --load \
   riscv64/ecosystem/coredns/
 ```
@@ -282,23 +307,26 @@ done
 ```bash
 K8S_VERSION=v1.36.0
 
-echo "=== Kubernetes component images ==="
+echo "=== Kubernetes component images (suffixed and unsuffixed) ==="
 for img in kube-apiserver kube-controller-manager kube-scheduler kube-proxy; do
-  echo -n "${img}: "
-  docker inspect ${REGISTRY}/${img}:${K8S_VERSION} --format '{{.Architecture}}' 2>/dev/null || echo "MISSING"
+  for name in "${img}-riscv64" "${img}"; do
+    echo -n "${name}: "
+    docker inspect ${REGISTRY}/${name}:${K8S_VERSION} --format '{{.Architecture}}' 2>/dev/null || echo "MISSING"
+  done
 done
 
 echo "=== Dependency images ==="
 for img in "go-runner:v2.4.0-go${GO_VERSION}-trixie.0" \
            "distroless-iptables:v0.9.0-trixie.0" \
            "setcap:trixie-v1.0.0" \
+           "pause:3.10.2-linux-riscv64" \
            "pause:3.10.2"; do
   echo -n "${img}: "
   docker inspect ${REGISTRY}/${img} --format '{{.Architecture}}' 2>/dev/null || echo "MISSING"
 done
 
 echo "=== Ecosystem images ==="
-for img in "etcd:v3.5.21-riscv64" "coredns:v1.12.1-riscv64" "flannel:v0.28.0-riscv64"; do
+for img in "etcd:3.6.8-0" "coredns:v1.14.2" "flannel:v0.28.0-riscv64"; do
   echo -n "${img}: "
   docker inspect ${REGISTRY}/${img} --format '{{.Architecture}}' 2>/dev/null || echo "MISSING"
 done
@@ -329,12 +357,15 @@ echo ${GITHUB_TOKEN} | docker login ghcr.io -u ${GITHUB_USER} --password-stdin
 
 K8S_VERSION=v1.36.0
 
-# Kubernetes components
+# Kubernetes components: arch-suffixed (upstream convention) plus
+# unsuffixed aliases for kubeadm's imageRepository resolution
 for img in kube-apiserver kube-controller-manager kube-scheduler kube-proxy; do
+  docker push ${REGISTRY}/${img}-riscv64:${K8S_VERSION}
   docker push ${REGISTRY}/${img}:${K8S_VERSION}
 done
 
-# Pause
+# Pause: suffixed and unsuffixed
+docker push ${REGISTRY}/pause:3.10.2-linux-riscv64
 docker push ${REGISTRY}/pause:3.10.2
 
 # Dependency images
@@ -342,9 +373,10 @@ docker push ${REGISTRY}/go-runner:v2.4.0-go${GO_VERSION}-trixie.0
 docker push ${REGISTRY}/distroless-iptables:v0.9.0-trixie.0
 docker push ${REGISTRY}/setcap:trixie-v1.0.0
 
-# Ecosystem
-docker push ${REGISTRY}/etcd:v3.5.21-riscv64
-docker push ${REGISTRY}/coredns:v1.12.1-riscv64
+# Ecosystem (etcd and coredns are unsuffixed only; the tags match
+# kubeadm's constants in cmd/kubeadm/app/constants/constants.go)
+docker push ${REGISTRY}/etcd:3.6.8-0
+docker push ${REGISTRY}/coredns:v1.14.2
 docker push ${REGISTRY}/flannel:v0.28.0-riscv64
 ```
 
@@ -409,9 +441,17 @@ Complete inventory of artifacts produced by this guide:
 | `kube-scheduler:v1.36.0` | go-runner | Control plane |
 | `kube-proxy:v1.36.0` | distroless-iptables | Node networking |
 | `pause:3.10.2` | scratch | Pod sandbox |
-| `etcd:v3.5.21-riscv64` | distroless/static-debian13 | Key-value store |
-| `coredns:v1.12.1-riscv64` | distroless/static-debian13 | Cluster DNS |
+| `etcd:3.6.8-0` | distroless/static-debian13 | Key-value store |
+| `coredns:v1.14.2` | distroless/static-debian13 | Cluster DNS |
 | `flannel:v0.28.0-riscv64` | debian:trixie-slim | Pod network |
+
+The Kubernetes component and pause images are also published under the
+arch-suffixed names (`kube-apiserver-riscv64:v1.36.0`,
+`pause:3.10.2-linux-riscv64`); the unsuffixed names above are what kubeadm
+resolves through its `imageRepository` setting. The distroless base is the
+root variant (`gcr.io/distroless/static-debian13:latest`): kubeadm static
+pods read root-owned paths such as `/etc/kubernetes/pki` and
+`/var/lib/etcd`, and CoreDNS binds port 53.
 
 ### Dependency Images (not deployed directly)
 
