@@ -332,6 +332,19 @@ First boot to SSH takes about 90 seconds on a modern x86_64 host.
   host and scp them in via the forwarded port instead.
 - Import images into the containerd namespace kubelet uses:
   `ctr -n k8s.io images import <bundle>.tar`.
+- Ubuntu 25.10+ (including 26.04 LTS) raised the riscv64 baseline to
+  RVA23: those images REQUIRE `-cpu rva23s64`, available only in QEMU
+  10.1+. Older QEMU (or `-cpu rv64`) hangs right after U-Boot because
+  the kernel uses vector and other RVA23-mandatory instructions.
+  `rva23s64` also still boots 24.04 images. Distro QEMU is often too
+  old; build from source with `--target-list=riscv64-softmmu`
+  (libslirp-dev required for `-netdev user`).
+- RVA23 emulation is markedly slower than plain rv64. On single
+  control-plane clusters set `leader-elect=false` for
+  kube-controller-manager and kube-scheduler (kubeadm
+  `controllerManager/scheduler.extraArgs`); otherwise lease renewals
+  can exceed their 5s timeout, restarting both components in a loop so
+  DaemonSet/Deployment pods are never created.
 - Under TCG emulation the control plane starts slowly; raise kubeadm's
   v1beta4 timeouts in InitConfiguration:
 
