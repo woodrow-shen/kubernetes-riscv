@@ -345,6 +345,22 @@ First boot to SSH takes about 90 seconds on a modern x86_64 host.
   `controllerManager/scheduler.extraArgs`); otherwise lease renewals
   can exceed their 5s timeout, restarting both components in a loop so
   DaemonSet/Deployment pods are never created.
+- Enlarge the TCG translation cache: `-accel tcg,tb-size=2048` (MB of
+  host RAM, reserved lazily). The default cache cannot hold the
+  translated code of seven-plus large Go binaries; the resulting
+  flush/retranslate thrash consumed ~18% of QEMU cycles and tripled
+  steady-state guest load in profiling. With 2048 MB, retranslation
+  drops to ~3% and load falls by more than half. Profiling also showed
+  RVV vector emulation is NOT a factor for Kubernetes workloads
+  (~0.5% of cycles): the components are Go binaries, which do not use
+  the vectorized glibc routines.
+- For multi-VM clusters, connect the inter-VM network with
+  `-netdev stream,addr.type=inet,addr.host=127.0.0.1,addr.port=<port>`
+  (`server=on` on one VM, `server=off,reconnect-ms=5000` on the
+  others) instead of the legacy `-netdev socket`. The socket netdev
+  never reconnects, so restarting one QEMU permanently severs the
+  link until the peers are also restarted; the stream netdev with
+  reconnect survives peer restarts.
 - Under TCG emulation the control plane starts slowly; raise kubeadm's
   v1beta4 timeouts in InitConfiguration:
 
