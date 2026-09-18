@@ -350,7 +350,11 @@ First boot to SSH takes about 90 seconds on a modern x86_64 host.
   translated code of seven-plus large Go binaries; the resulting
   flush/retranslate thrash consumed ~18% of QEMU cycles and tripled
   steady-state guest load in profiling. With 2048 MB, retranslation
-  drops to ~3% and load falls by more than half. Profiling also showed
+  drops to ~3% and load falls by more than half (settling to ~1% once
+  the system has run for an hour). Note 2048 MB is also the hard
+  maximum: TCG links translation blocks with +/-2GB-displacement
+  branches on x86-64 hosts, so the whole code buffer must fit one 2GB
+  window and QEMU silently clamps larger values. Profiling also showed
   RVV vector emulation is NOT a factor for Kubernetes workloads
   (~0.5% of cycles): the components are Go binaries, which do not use
   the vectorized glibc routines.
