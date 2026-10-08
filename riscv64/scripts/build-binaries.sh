@@ -11,7 +11,7 @@
 # Environment variables:
 #   KUBE_CROSS_IMAGE    Override the kube-cross image
 #   KUBE_CROSS_VERSION  Override the kube-cross image tag
-#   CGO_ENABLED         Set to 0 to disable CGO (default: 1)
+#   (all binaries build static/CGO-free since v1.38)
 
 set -euo pipefail
 
@@ -29,12 +29,6 @@ export KUBE_BUILD_PLATFORMS=linux/riscv64
 # Use 'make all' instead of 'make cross' because 'make cross' ignores WHAT
 # and builds all server/node/client targets. 'make all' respects WHAT.
 #
-# KUBE_STATIC_OVERRIDES=kubelet forces kubelet to build without CGO, which
-# avoids the need for a full riscv64 glibc sysroot. This disables seccomp
-# support. For CGO-enabled kubelet, ensure libc6-dev-riscv64-cross (Debian)
-# or equivalent sysroot is installed, then unset KUBE_STATIC_OVERRIDES.
-export KUBE_STATIC_OVERRIDES="${KUBE_STATIC_OVERRIDES:-kubelet}"
-
 make all WHAT="${WHAT}"
 
 echo ""

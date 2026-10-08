@@ -8,7 +8,7 @@ Status of all components required for a functional Kubernetes cluster on
 | Component | Version | riscv64 Status |
 |-----------|---------|---------------|
 | Go compiler | 1.27.1 | First-class port since Go 1.21 |
-| CGO | - | Supported with `riscv64-linux-gnu-gcc` |
+| CGO | - | Not needed since v1.38 (all binaries static); `riscv64-linux-gnu-gcc` only for pause |
 
 ## Container Runtime
 
@@ -27,7 +27,7 @@ Status of all components required for a functional Kubernetes cluster on
 | kube-controller-manager | `make all` | No | |
 | kube-scheduler | `make all` | No | |
 | kube-proxy | `make all` | No | |
-| kubelet | `make all` | Recommended | seccomp requires CGO |
+| kubelet | `make all` | No | static since v1.38 (upstream 81922ce9b57) |
 | kubeadm | `make all` | No | |
 | kubectl | `make all` | No | |
 

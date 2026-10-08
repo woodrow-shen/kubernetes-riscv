@@ -80,12 +80,13 @@ For containerd v1.x:
   sandbox_image = "ghcr.io/riseproject-dev/pause:3.10.2"
 ```
 
-## kubelet CGO and seccomp
+## kubelet CGO and seccomp (resolved in v1.38)
 
-When kubelet is built with `CGO_ENABLED=0` (or via `KUBE_STATIC_OVERRIDES=kubelet`),
-seccomp support is disabled. This means seccomp profiles in pod security contexts
-will not be enforced. For production clusters, build kubelet with CGO enabled using
-the `riscv64-linux-gnu-gcc` cross-compiler and a full glibc sysroot.
+Historical issue for pre-v1.38 trees only: kubelet used to require CGO
+(and therefore a riscv64 glibc sysroot when cross-compiling) for seccomp
+support. Since the v1.38 development cycle upstream builds kubelet as a
+static CGO-free binary (kubernetes/kubernetes commit 81922ce9b57), so no
+cross C toolchain or `KUBE_STATIC_OVERRIDES` handling is needed anymore.
 
 ## `make cross` ignores WHAT
 
@@ -99,13 +100,12 @@ KUBE_BUILD_PLATFORMS=linux/riscv64 make all WHAT="cmd/kubectl cmd/kubeadm"
 
 ## Fedora: Missing riscv64 glibc Sysroot
 
-Fedora's `gcc-riscv64-linux-gnu` package is a bare cross-compiler without glibc
-headers. CGO-enabled builds (kubelet) fail with `pthread.h: No such file or
-directory`. Workarounds:
-
-1. Build kubelet statically: `KUBE_STATIC_OVERRIDES=kubelet`
-2. Use the dockerized kube-cross build method (Method 3 in the build guide)
-3. Use Debian/Ubuntu, which ships `libc6-dev-riscv64-cross` with full headers
+Fedora's `gcc-riscv64-linux-gnu` package is a bare cross-compiler without
+glibc. Since v1.38 this no longer affects the Kubernetes binaries (all
+static, no CGO); it only matters for cross-building the pause image,
+which links against static glibc. Workarounds: build pause via the
+dockerized kube-cross method, or use Debian/Ubuntu, which ships
+`libc6-dev-riscv64-cross`.
 
 ## No Official Release Artifacts
 

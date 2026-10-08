@@ -44,15 +44,13 @@ sudo apt-get install -y git make gcc rsync podman podman-docker containerd
 ### For cross-compilation (from amd64/arm64)
 
 - Linux distribution with podman and Go
-- Cross-compiler toolchain (for CGO-enabled kubelet)
+- C cross toolchain only for the pause image (all Kubernetes binaries
+  are static and CGO-free since v1.38)
 
 ```bash
 # Debian/Ubuntu
 sudo apt-get install podman podman-docker \
   gcc-riscv64-linux-gnu libc6-dev-riscv64-cross
-
-# Fedora (see CGO note in building.md)
-sudo dnf install podman podman-docker gcc-riscv64-linux-gnu
 
 # Register QEMU binfmt for cross-architecture container builds
 podman run --rm --privileged multiarch/qemu-user-static --reset -p yes
@@ -107,19 +105,10 @@ Binaries appear in `_output/local/bin/linux/riscv64/`.
 ### Cross-compile (from amd64/arm64)
 
 ```bash
-# Static binaries (all components except kubelet)
+# All components, kubelet included, build static (CGO-free) since v1.38
 KUBE_BUILD_PLATFORMS=linux/riscv64 make all \
-  WHAT="cmd/kubectl cmd/kubeadm cmd/kube-apiserver \
+  WHAT="cmd/kubelet cmd/kubectl cmd/kubeadm cmd/kube-apiserver \
         cmd/kube-controller-manager cmd/kube-scheduler cmd/kube-proxy"
-
-# kubelet (choose one):
-
-# Option A: Static kubelet (no seccomp support, no cross-compiler needed)
-KUBE_BUILD_PLATFORMS=linux/riscv64 KUBE_STATIC_OVERRIDES=kubelet \
-  make all WHAT="cmd/kubelet"
-
-# Option B: CGO kubelet (requires libc6-dev-riscv64-cross on Debian/Ubuntu)
-KUBE_BUILD_PLATFORMS=linux/riscv64 make all WHAT="cmd/kubelet"
 ```
 
 ### Verify binaries

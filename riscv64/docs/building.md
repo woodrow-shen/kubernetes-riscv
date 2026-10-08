@@ -19,19 +19,21 @@ git checkout v1.38.0  # or your target version
 
 The simplest approach. Builds on your existing x86_64 or arm64 workstation.
 
-### Install the cross-compiler toolchain
+### Toolchain
+
+No C cross-compiler is required for the Kubernetes binaries: as of the
+v1.38 development cycle every component, including kubelet, is built as
+a static CGO-free binary upstream (kubernetes/kubernetes commit
+81922ce9b57, "Build kubelet as a static binary"). A Go toolchain
+matching `.go-version` is all you need.
+
+The C toolchain below is only needed if you also build the pause image
+(a small static C program):
 
 ```bash
-# Debian/Ubuntu (includes glibc headers for CGO)
+# Debian/Ubuntu (gcc plus static glibc for linking pause)
 sudo apt-get install gcc-riscv64-linux-gnu libc6-dev-riscv64-cross
-
-# Fedora (bare cross-compiler only; see CGO note below)
-sudo dnf install gcc-riscv64-linux-gnu
 ```
-
-> **Fedora note:** Fedora's `gcc-riscv64-linux-gnu` does not include glibc
-> headers (no `libc6-dev-riscv64-cross` equivalent). Binaries that need CGO
-> (kubelet) must be built statically or via the dockerized kube-cross method.
 
 ### Build all server binaries
 
@@ -39,35 +41,18 @@ Use `make all` (not `make cross`) when targeting a specific set of binaries.
 `make cross` ignores `WHAT` and builds all targets for all platforms.
 
 ```bash
-# Static binaries (no CGO sysroot needed)
 KUBE_BUILD_PLATFORMS=linux/riscv64 make all \
-  WHAT="cmd/kubectl cmd/kubeadm cmd/kube-apiserver \
+  WHAT="cmd/kubelet cmd/kubectl cmd/kubeadm cmd/kube-apiserver \
         cmd/kube-controller-manager cmd/kube-scheduler cmd/kube-proxy"
-
-# kubelet without CGO (no seccomp support)
-KUBE_BUILD_PLATFORMS=linux/riscv64 KUBE_STATIC_OVERRIDES=kubelet \
-  make all WHAT="cmd/kubelet"
-
-# kubelet with CGO (requires glibc sysroot, e.g., on Debian/Ubuntu)
-KUBE_BUILD_PLATFORMS=linux/riscv64 make all WHAT="cmd/kubelet"
 ```
+
+All binaries, kubelet included, come out statically linked.
 
 ### Build specific binaries
 
 ```bash
 # Just kubectl
 KUBE_BUILD_PLATFORMS=linux/riscv64 make all WHAT="cmd/kubectl"
-```
-
-### Build without CGO (no cross-compiler needed)
-
-Most Kubernetes binaries are classified as static and build with
-`CGO_ENABLED=0` automatically. Only kubelet uses CGO by default.
-To force kubelet static as well:
-
-```bash
-KUBE_BUILD_PLATFORMS=linux/riscv64 KUBE_STATIC_OVERRIDES=kubelet \
-  make all WHAT="cmd/kubelet"
 ```
 
 ### Output location
@@ -161,39 +146,22 @@ build/run.sh make all WHAT="cmd/kubelet cmd/kubeadm cmd/kubectl"
 
 ## CGO Considerations
 
-Kubernetes uses CGO for certain features:
+None for the Kubernetes binaries: since the v1.38 development cycle all
+components build with `CGO_ENABLED=0` (kubelet was the last holdout;
+upstream made it static in commit 81922ce9b57). The historical guidance
+about a CGO kubelet for seccomp support, `KUBE_STATIC_OVERRIDES`, and a
+riscv64 glibc sysroot applies only to pre-v1.38 trees.
 
-| Binary | CGO Required | Features Requiring CGO |
-|--------|-------------|----------------------|
-| kubelet | Recommended | seccomp, device plugins |
-| kube-apiserver | No | - |
-| kube-controller-manager | No | - |
-| kube-scheduler | No | - |
-| kube-proxy | No | - |
-| kubectl | No | - |
-| kubeadm | No | - |
-
-When building with CGO enabled (the default for kubelet), the cross-compiler
-`riscv64-linux-gnu-gcc` must be available. The build system uses the
-`KUBE_LINUX_RISCV64_CC` environment variable to override the default compiler:
-
-```bash
-# Override the cross-compiler (default: riscv64-linux-gnu-gcc)
-export KUBE_LINUX_RISCV64_CC=riscv64-linux-gnu-gcc
-```
+If you do force a CGO build explicitly, the build system still honors
+`KUBE_LINUX_RISCV64_CC` (default: `riscv64-linux-gnu-gcc`).
 
 ## Troubleshooting
 
 ### "riscv64-linux-gnu-gcc: command not found"
 
-Install the cross-compiler:
+Only the pause image build needs this compiler:
 ```bash
-sudo apt-get install gcc-riscv64-linux-gnu
-```
-
-Or build without CGO:
-```bash
-export CGO_ENABLED=0
+sudo apt-get install gcc-riscv64-linux-gnu libc6-dev-riscv64-cross
 ```
 
 ### "unsupported GOOS/GOARCH pair"

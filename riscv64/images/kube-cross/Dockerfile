@@ -54,7 +54,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tar \
     unzip \
     wget \
-    # Cross-compilation toolchains for riscv64
+    # C toolchain for the pause image only; the Kubernetes binaries are
+    # static CGO-free since v1.38 (upstream 81922ce9b57)
     gcc-riscv64-linux-gnu \
     libc6-dev-riscv64-cross \
     && rm -rf /var/lib/apt/lists/*

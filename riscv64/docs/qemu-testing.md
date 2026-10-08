@@ -53,7 +53,7 @@ riscv64 instructions on the host CPU.
 
 ```bash
 # Build binaries (see building.md)
-KUBE_BUILD_PLATFORMS=linux/riscv64 KUBE_STATIC_OVERRIDES=kubelet \
+KUBE_BUILD_PLATFORMS=linux/riscv64 \
   make all WHAT="cmd/kubectl cmd/kubeadm cmd/kubelet \
     cmd/kube-apiserver cmd/kube-controller-manager \
     cmd/kube-scheduler cmd/kube-proxy"
