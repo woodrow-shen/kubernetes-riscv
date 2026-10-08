@@ -108,7 +108,7 @@ Community releases are tagged `${K8S_VERSION}-riscv64` and contain flat
 tarballs of binaries (see the Releases page):
 
 ```bash
-K8S_VERSION=v1.36.0
+K8S_VERSION=v1.38.0
 
 curl -fsSL "https://github.com/riseproject-dev/kubernetes-riscv/releases/download/${K8S_VERSION}-riscv64/kubernetes-node-linux-riscv64-${K8S_VERSION}.tar.gz" \
   | sudo tar -C /usr/local/bin -xz
@@ -158,7 +158,7 @@ sudo systemctl enable kubelet
 
 The community images are published under `ghcr.io/riseproject-dev` with the
 exact names and tags kubeadm derives (`kube-apiserver:${K8S_VERSION}`,
-`etcd:3.6.8-0`, `coredns:v1.14.2`, `pause:3.10.2`), so pointing kubeadm's
+`etcd:3.7.1-0`, `coredns:v1.14.7`, `pause:3.10.2`), so pointing kubeadm's
 `imageRepository` at the community registry is all that is needed — no
 manual pulling or retagging.
 
@@ -167,7 +167,7 @@ etcd does not officially support riscv64 and refuses to start unless
 it into the etcd static pod that kubeadm generates.
 
 ```bash
-K8S_VERSION=v1.36.0
+K8S_VERSION=v1.38.0
 
 cat <<EOF > kubeadm-config.yaml
 apiVersion: kubeadm.k8s.io/v1beta4
@@ -247,7 +247,7 @@ sudo kubeadm join <control-plane-ip>:6443 --token <token> --discovery-token-ca-c
 # Check nodes
 kubectl get nodes -o wide
 # NAME     STATUS   ROLES           AGE   VERSION   INTERNAL-IP   OS-IMAGE           KERNEL-VERSION   CONTAINER-RUNTIME   ARCH
-# node1    Ready    control-plane   5m    v1.36.0   10.0.0.1      Debian Trixie      6.x.x            containerd://1.7    riscv64
+# node1    Ready    control-plane   5m    v1.38.0   10.0.0.1      Debian Trixie      6.x.x            containerd://1.7    riscv64
 
 # Check system pods
 kubectl get pods -n kube-system

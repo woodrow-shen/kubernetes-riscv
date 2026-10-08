@@ -7,7 +7,7 @@
 #
 # Build:
 #   docker buildx build --platform linux/riscv64 \
-#     --build-arg GORUNNERIMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0 \
+#     --build-arg GORUNNERIMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.27.1-trixie.0 \
 #     -t ghcr.io/riseproject-dev/distroless-iptables:v0.9.0-trixie.0 .
 #
 # This follows the upstream trixie variant pattern, staging binaries and their
@@ -17,7 +17,7 @@ ARG BASEIMAGE=debian:trixie-slim
 # Root variant required: upstream distroless-iptables runs as root because
 # kube-proxy must manage iptables/nftables rules.
 ARG DISTROLESS_IMAGE=gcr.io/distroless/static-debian13:latest
-ARG GORUNNERIMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0
+ARG GORUNNERIMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.27.1-trixie.0
 
 FROM ${GORUNNERIMAGE} AS go-runner-src
 

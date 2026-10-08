@@ -7,7 +7,7 @@ Status of all components required for a functional Kubernetes cluster on
 
 | Component | Version | riscv64 Status |
 |-----------|---------|---------------|
-| Go compiler | 1.26.2 | First-class port since Go 1.21 |
+| Go compiler | 1.27.1 | First-class port since Go 1.21 |
 | CGO | - | Supported with `riscv64-linux-gnu-gcc` |
 
 ## Container Runtime
@@ -67,13 +67,13 @@ upstream images: kubeadm static pods read root-owned paths such as
 
 | Component | Version | riscv64 Status | Notes |
 |-----------|---------|---------------|-------|
-| etcd | v3.6.8 | Compiles from source | Requires `ETCD_UNSUPPORTED_ARCH=riscv64`; published as `etcd:3.6.8-0` |
-| CoreDNS | v1.14.2 | Compiles from source | Pure Go, no special handling; published as `coredns:v1.14.2` |
+| etcd | v3.7.1 | Compiles from source | Requires `ETCD_UNSUPPORTED_ARCH=riscv64`; published as `etcd:3.7.1-0` |
+| CoreDNS | v1.14.7 | Compiles from source | Pure Go, no special handling; published as `coredns:v1.14.7` |
 | Flannel | v0.28.0 | Compiles from source | Includes CNI plugin; published as `flannel:v0.28.0-riscv64` |
 | Helm | v3.x | Official riscv64 binaries | [github.com/helm/helm](https://github.com/helm/helm/releases) |
 | crictl | v1.x | Compiles from source | CRI debugging tool |
 
-The etcd, CoreDNS, and pause image tags (`etcd:3.6.8-0`, `coredns:v1.14.2`,
+The etcd, CoreDNS, and pause image tags (`etcd:3.7.1-0`, `coredns:v1.14.7`,
 `pause:3.10.2`) must track kubeadm's defaults in
 `cmd/kubeadm/app/constants/constants.go` so that kubeadm with a custom
 `imageRepository` pulls them directly.

@@ -4,13 +4,13 @@
 #
 # Build:
 #   docker buildx build --platform linux/riscv64 \
-#     --build-arg COREDNS_VERSION=v1.14.2 \
-#     -t ghcr.io/riseproject-dev/coredns:v1.14.2 .
+#     --build-arg COREDNS_VERSION=v1.14.7 \
+#     -t ghcr.io/riseproject-dev/coredns:v1.14.7 .
 #
-# The image tag must match kubeadm's CoreDNSVersion (e.g. v1.14.2) so that
+# The image tag must match kubeadm's CoreDNSVersion (e.g. v1.14.7) so that
 # `kubeadm init --image-repository ghcr.io/riseproject-dev` resolves it.
 
-ARG GO_VERSION=1.26.2
+ARG GO_VERSION=1.27.1
 # Root variant required: CoreDNS binds :53 and Kubernetes does not grant
 # ambient capabilities to non-root container users, matching the upstream
 # coredns/coredns image which also runs as root.
@@ -19,7 +19,7 @@ ARG BASEIMAGE=gcr.io/distroless/static-debian13:latest
 # Stage 1: Build CoreDNS from source
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-trixie AS builder
 
-ARG COREDNS_VERSION=v1.14.2
+ARG COREDNS_VERSION=v1.14.7
 ARG TARGETOS=linux
 ARG TARGETARCH=riscv64
 

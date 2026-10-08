@@ -8,17 +8,17 @@
 # Usage (native build on riscv64):
 #   docker run --rm -v $PWD:/go/src/k8s.io/kubernetes \
 #     -w /go/src/k8s.io/kubernetes \
-#     ghcr.io/riseproject-dev/kube-cross:v1.36.0-go1.26.2-trixie.0 \
+#     ghcr.io/riseproject-dev/kube-cross:v1.38.0-go1.27.1-trixie.0 \
 #     make all WHAT="cmd/kubelet cmd/kubeadm cmd/kubectl"
 #
 # Usage (cross-compile from amd64):
 #   docker run --rm -v $PWD:/go/src/k8s.io/kubernetes \
 #     -w /go/src/k8s.io/kubernetes \
 #     -e KUBE_BUILD_PLATFORMS=linux/riscv64 \
-#     ghcr.io/riseproject-dev/kube-cross:v1.36.0-go1.26.2-trixie.0 \
+#     ghcr.io/riseproject-dev/kube-cross:v1.38.0-go1.27.1-trixie.0 \
 #     make cross WHAT="cmd/kubelet cmd/kubeadm cmd/kubectl"
 
-ARG GO_VERSION=1.26.2
+ARG GO_VERSION=1.27.1
 ARG BASEIMAGE=debian:trixie-slim
 
 # Stage 1: Get Go

@@ -8,7 +8,7 @@
 #     --build-arg FLANNEL_VERSION=v0.28.0 \
 #     -t ghcr.io/riseproject-dev/flannel:v0.28.0-riscv64 .
 
-ARG GO_VERSION=1.26.2
+ARG GO_VERSION=1.27.1
 ARG BASEIMAGE=debian:trixie-slim
 
 # Stage 1: Build Flannel from source

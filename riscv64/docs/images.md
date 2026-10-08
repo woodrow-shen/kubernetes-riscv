@@ -38,7 +38,7 @@ do not include riscv64 variants, so we provide community equivalents:
 ```bash
 # go-runner
 docker buildx build --platform linux/riscv64 \
-  -t ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0 \
+  -t ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.27.1-trixie.0 \
   riscv64/images/go-runner/
 
 # setcap
@@ -48,7 +48,7 @@ docker buildx build --platform linux/riscv64 \
 
 # distroless-iptables (depends on go-runner)
 docker buildx build --platform linux/riscv64 \
-  --build-arg GORUNNERIMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0 \
+  --build-arg GORUNNERIMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.27.1-trixie.0 \
   -t ghcr.io/riseproject-dev/distroless-iptables:v0.9.0-trixie.0 \
   riscv64/images/distroless-iptables/
 ```
@@ -61,9 +61,9 @@ component images using the Kubernetes build system with env var overrides:
 ```bash
 export KUBE_BUILD_PLATFORMS=linux/riscv64
 export KUBE_DOCKER_REGISTRY=ghcr.io/riseproject-dev
-export KUBE_GORUNNER_IMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0
+export KUBE_GORUNNER_IMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.27.1-trixie.0
 export KUBE_PROXY_BASE_IMAGE=ghcr.io/riseproject-dev/distroless-iptables:v0.9.0-trixie.0
-export KUBE_APISERVER_BASE_IMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0
+export KUBE_APISERVER_BASE_IMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.27.1-trixie.0
 export KUBE_BUILD_SETCAP_IMAGE=ghcr.io/riseproject-dev/setcap:trixie-v1.0.0
 
 make release-images
@@ -80,7 +80,7 @@ The release scripts name the component images with an architecture suffix
 `imageRepository: ghcr.io/riseproject-dev` resolves unsuffixed names:
 
 ```bash
-K8S_VERSION=v1.36.0
+K8S_VERSION=v1.38.0
 for img in kube-apiserver kube-controller-manager kube-scheduler kube-proxy; do
   docker tag ghcr.io/riseproject-dev/${img}-riscv64:${K8S_VERSION} \
              ghcr.io/riseproject-dev/${img}:${K8S_VERSION}
@@ -94,9 +94,9 @@ Each component image is a simple copy of the binary into the base image:
 ```bash
 # Example: kube-apiserver
 docker buildx build --platform linux/riscv64 \
-  --build-arg BASEIMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0 \
+  --build-arg BASEIMAGE=ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.27.1-trixie.0 \
   --build-arg BINARY=kube-apiserver \
-  -t ghcr.io/riseproject-dev/kube-apiserver:v1.36.0 \
+  -t ghcr.io/riseproject-dev/kube-apiserver:v1.38.0 \
   -f build/server-image/Dockerfile \
   _output/local/bin/linux/riscv64/
 ```
@@ -126,7 +126,7 @@ Override if needed:
 ```bash
 make ARCH=riscv64 TAG=3.10.2 REGISTRY=ghcr.io/riseproject-dev \
   KUBE_CROSS_IMAGE=ghcr.io/riseproject-dev/kube-cross \
-  KUBE_CROSS_VERSION=v1.36.0-go1.26.2-trixie.0
+  KUBE_CROSS_VERSION=v1.38.0-go1.27.1-trixie.0
 ```
 
 ## Building Ecosystem Component Images
@@ -134,7 +134,7 @@ make ARCH=riscv64 TAG=3.10.2 REGISTRY=ghcr.io/riseproject-dev \
 The etcd and CoreDNS image tags must match kubeadm's defaults
 (`DefaultEtcdVersion` and `CoreDNSVersion` in
 `cmd/kubeadm/app/constants/constants.go`), so they are published unsuffixed
-as `etcd:3.6.8-0` and `coredns:v1.14.2`. Both images use the
+as `etcd:3.7.1-0` and `coredns:v1.14.7`. Both images use the
 `gcr.io/distroless/static-debian13:latest` base (root variant, not
 `:nonroot`): the upstream images run as root, kubeadm static pods read
 root-owned paths such as `/etc/kubernetes/pki` and `/var/lib/etcd`, and
@@ -143,14 +143,14 @@ CoreDNS binds port 53.
 ```bash
 # etcd (tag matches kubeadm's DefaultEtcdVersion)
 docker buildx build --platform linux/riscv64 \
-  --build-arg ETCD_VERSION=v3.6.8 \
-  -t ghcr.io/riseproject-dev/etcd:3.6.8-0 \
+  --build-arg ETCD_VERSION=v3.7.1 \
+  -t ghcr.io/riseproject-dev/etcd:3.7.1-0 \
   riscv64/ecosystem/etcd/
 
 # CoreDNS (tag matches kubeadm's CoreDNSVersion)
 docker buildx build --platform linux/riscv64 \
-  --build-arg COREDNS_VERSION=v1.14.2 \
-  -t ghcr.io/riseproject-dev/coredns:v1.14.2 \
+  --build-arg COREDNS_VERSION=v1.14.7 \
+  -t ghcr.io/riseproject-dev/coredns:v1.14.7 \
   riscv64/ecosystem/coredns/
 
 # Flannel
@@ -167,7 +167,7 @@ docker buildx build --platform linux/riscv64 \
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 
 REGISTRY=ghcr.io/riseproject-dev
-K8S_VERSION=v1.36.0
+K8S_VERSION=v1.38.0
 GO_VERSION=$(cat .go-version)
 
 # Kubernetes components: arch-suffixed (upstream convention) plus
@@ -187,8 +187,8 @@ docker push ${REGISTRY}/distroless-iptables:v0.9.0-trixie.0
 docker push ${REGISTRY}/setcap:trixie-v1.0.0
 
 # Ecosystem (etcd and coredns are unsuffixed only)
-docker push ${REGISTRY}/etcd:3.6.8-0
-docker push ${REGISTRY}/coredns:v1.14.2
+docker push ${REGISTRY}/etcd:3.7.1-0
+docker push ${REGISTRY}/coredns:v1.14.7
 docker push ${REGISTRY}/flannel:v0.28.0-riscv64
 ```
 

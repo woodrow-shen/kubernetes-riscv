@@ -60,7 +60,7 @@ KUBE_BUILD_PLATFORMS=linux/riscv64 KUBE_STATIC_OVERRIDES=kubelet \
 
 # Test with qemu-riscv64-static
 qemu-riscv64-static _output/local/bin/linux/riscv64/kubectl version --client
-# Client Version: v1.36.0 ... Platform: linux/riscv64
+# Client Version: v1.38.0 ... Platform: linux/riscv64
 
 qemu-riscv64-static _output/local/bin/linux/riscv64/kubeadm version
 qemu-riscv64-static _output/local/bin/linux/riscv64/kubelet --version

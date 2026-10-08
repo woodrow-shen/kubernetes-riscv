@@ -40,9 +40,9 @@ permissions:
 # kubeadm with imageRepository=${REGISTRY} pulls these images directly.
 env:
   REGISTRY: ghcr.io/riseproject-dev
-  ETCD_VERSION: v3.6.8
-  ETCD_IMAGE_TAG: "3.6.8-0"
-  COREDNS_VERSION: v1.14.2
+  ETCD_VERSION: v3.7.1
+  ETCD_IMAGE_TAG: "3.7.1-0"
+  COREDNS_VERSION: v1.14.7
   FLANNEL_VERSION: v0.28.0
   PAUSE_TAG: "3.10.2"
 
@@ -212,7 +212,7 @@ jobs:
           IPTABLES_TAG="v0.9.0-trixie.0"
           SETCAP_TAG="trixie-v1.0.0"
 
-          KUBE_CROSS_TAG="v1.36.0-go${GO_VERSION}-trixie.0"
+          KUBE_CROSS_TAG="v1.38.0-go${GO_VERSION}-trixie.0"
 
           echo "GO_RUNNER_TAG=${GO_RUNNER_TAG}" >> "$GITHUB_ENV"
           echo "IPTABLES_TAG=${IPTABLES_TAG}" >> "$GITHUB_ENV"

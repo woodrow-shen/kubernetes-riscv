@@ -6,13 +6,13 @@
 #
 # Build:
 #   docker buildx build --platform linux/riscv64 \
-#     --build-arg GO_VERSION=1.26.2 \
-#     -t ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.26.2-trixie.0 .
+#     --build-arg GO_VERSION=1.27.1 \
+#     -t ghcr.io/riseproject-dev/go-runner:v2.4.0-go1.27.1-trixie.0 .
 #
 # The go-runner binary is a simple log-routing wrapper used as the entrypoint
 # for Kubernetes component container images.
 
-ARG GO_VERSION=1.26.2
+ARG GO_VERSION=1.27.1
 # Root variant required: upstream go-runner runs as USER 0 and kubeadm
 # control-plane static pods must read root-owned /etc/kubernetes/pki.
 ARG DISTROLESS_IMAGE=gcr.io/distroless/static-debian13:latest

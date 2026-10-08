@@ -90,7 +90,7 @@ tiers. This section addresses each criterion.
 ### Go Toolchain Classification
 
 Go has supported `GOARCH=riscv64` as a **first-class port** since Go 1.21
-(August 2023). Kubernetes currently uses Go 1.26.2. All Kubernetes Go code
+(August 2023). Kubernetes currently uses Go 1.27.1. All Kubernetes Go code
 compiles for riscv64 without modification.
 
 Per the policy: "Platforms where Go itself treats the architecture as a
@@ -216,7 +216,7 @@ consumed.
 
 | Component | riscv64 Status |
 |-----------|---------------|
-| Go 1.26.2 | First-class port |
+| Go 1.27.1 | First-class port |
 | containerd | Official riscv64 binaries (since 1.7) |
 | runc | Official riscv64 binaries |
 | crun | Official riscv64 binaries |

@@ -8,8 +8,8 @@
 #   REGISTRY            Container registry (default: ghcr.io/riseproject-dev)
 #   K8S_VERSION         Kubernetes version tag (default: from git)
 #   GO_VERSION          Go version (default: from .go-version)
-#   ETCD_VERSION        etcd version (default: v3.6.8)
-#   COREDNS_VERSION     CoreDNS version (default: v1.14.2)
+#   ETCD_VERSION        etcd version (default: v3.7.1)
+#   COREDNS_VERSION     CoreDNS version (default: v1.14.7)
 #   FLANNEL_VERSION     Flannel version (default: v0.28.0)
 #   PAUSE_TAG           Pause image tag (default: 3.10.2)
 #
@@ -25,11 +25,11 @@ cd "${KUBE_ROOT}"
 REGISTRY="${1:-${REGISTRY:-ghcr.io/riseproject-dev}}"
 GO_VERSION="${GO_VERSION:-$(cat .go-version)}"
 K8S_VERSION="${K8S_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")}"
-ETCD_VERSION="${ETCD_VERSION:-v3.6.8}"
-COREDNS_VERSION="${COREDNS_VERSION:-v1.14.2}"
+ETCD_VERSION="${ETCD_VERSION:-v3.7.1}"
+COREDNS_VERSION="${COREDNS_VERSION:-v1.14.7}"
 FLANNEL_VERSION="${FLANNEL_VERSION:-v0.28.0}"
 PAUSE_TAG="${PAUSE_TAG:-3.10.2}"
-# kubeadm's etcd image tag appends a rebuild revision (e.g. 3.6.8-0)
+# kubeadm's etcd image tag appends a rebuild revision (e.g. 3.7.1-0)
 ETCD_IMAGE_TAG="${ETCD_IMAGE_TAG:-${ETCD_VERSION#v}-0}"
 PLATFORM="linux/riscv64"
 

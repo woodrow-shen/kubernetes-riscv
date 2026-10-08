@@ -6,13 +6,13 @@ This guide covers three methods for building Kubernetes binaries for `linux/risc
 
 All methods require:
 - Git
-- Go 1.26.2+ (must match the `.go-version` in the Kubernetes source tree)
+- Go 1.27.1+ (must match the `.go-version` in the Kubernetes source tree)
 - The Kubernetes source checked out at the target version
 
 ```bash
 git clone https://github.com/kubernetes/kubernetes.git
 cd kubernetes
-git checkout v1.36.0  # or your target version
+git checkout v1.38.0  # or your target version
 ```
 
 ## Method 1: Cross-Compile from amd64/arm64 (Recommended)
@@ -140,7 +140,7 @@ docker run --rm \
   -v "$PWD":/go/src/k8s.io/kubernetes \
   -w /go/src/k8s.io/kubernetes \
   -e KUBE_BUILD_PLATFORMS=linux/riscv64 \
-  ghcr.io/riseproject-dev/kube-cross:v1.36.0-go1.26.2-trixie.0 \
+  ghcr.io/riseproject-dev/kube-cross:v1.38.0-go1.27.1-trixie.0 \
   make all WHAT="cmd/kubelet cmd/kubeadm cmd/kubectl"
 ```
 
@@ -153,7 +153,7 @@ Set the `KUBE_CROSS_IMAGE` override to point to the community image:
 
 ```bash
 export KUBE_CROSS_IMAGE=ghcr.io/riseproject-dev/kube-cross
-export KUBE_CROSS_VERSION=v1.36.0-go1.26.2-trixie.0
+export KUBE_CROSS_VERSION=v1.38.0-go1.27.1-trixie.0
 export KUBE_BUILD_PLATFORMS=linux/riscv64
 
 build/run.sh make all WHAT="cmd/kubelet cmd/kubeadm cmd/kubectl"
